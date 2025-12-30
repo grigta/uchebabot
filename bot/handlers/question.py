@@ -16,6 +16,7 @@ from bot.keyboards import (
     get_interview_options_keyboard,
     get_main_keyboard,
     get_plan_keyboard,
+    get_solution_keyboard,
 )
 from bot.config import settings
 from bot.services import ModerationService, UserService
@@ -436,7 +437,7 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
         # Save request and update usage
         async with async_session() as session:
             user_service = UserService(session)
-            await user_service.increment_usage(
+            request_id = await user_service.increment_usage(
                 telegram_id=message.chat.id,
                 tokens=response["total_tokens"],
                 question=question,
@@ -455,15 +456,22 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
                 cost_usd=cost_usd,
             )
 
-        # Split and send long messages
-        chunks = split_message(clean_answer)
-        for i, chunk in enumerate(chunks):
-            if i == len(chunks) - 1:
-                await safe_send_message(
-                    message, chunk, reply_markup=get_main_keyboard()
-                )
-            else:
-                await safe_send_message(message, chunk)
+        # If Mini App is configured, show WebApp button instead of text
+        if settings.webapp_url and request_id:
+            await message.answer(
+                "✅ Решение готово! Нажми кнопку, чтобы открыть.",
+                reply_markup=get_solution_keyboard(request_id),
+            )
+        else:
+            # Fallback: send text directly (if Mini App not configured)
+            chunks = split_message(clean_answer)
+            for i, chunk in enumerate(chunks):
+                if i == len(chunks) - 1:
+                    await safe_send_message(
+                        message, chunk, reply_markup=get_main_keyboard()
+                    )
+                else:
+                    await safe_send_message(message, chunk)
 
     except Exception as e:
         logger.error(f"Error in task solving: {e}")

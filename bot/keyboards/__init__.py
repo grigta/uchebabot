@@ -6,6 +6,7 @@ from bot.keyboards.inline import (
     get_interview_keyboard,
     get_interview_options_keyboard,
     get_plan_keyboard,
+    get_solution_keyboard,
 )
 from bot.keyboards.reply import get_main_keyboard
 
@@ -16,4 +17,5 @@ __all__ = [
     "get_interview_options_keyboard",
     "get_plan_keyboard",
     "get_cancel_keyboard",
+    "get_solution_keyboard",
 ]

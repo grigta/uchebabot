@@ -118,11 +118,11 @@ class UserService:
         total_completion_tokens: int = 0,
         total_all_tokens: int = 0,
         cost_usd: float = 0.0,
-    ) -> None:
-        """Increment user's usage counters and save request."""
+    ) -> Optional[int]:
+        """Increment user's usage counters and save request. Returns request ID."""
         user = await self.user_repo.get_by_telegram_id(telegram_id)
         if not user:
-            return
+            return None
 
         # Handle different request types
         if request_type == "bonus":
@@ -140,7 +140,7 @@ class UserService:
         user.last_request_date = datetime.utcnow()
 
         # Save request record
-        await self.request_repo.create(
+        request = await self.request_repo.create(
             user_id=user.id,
             question=question,
             answer=answer,
@@ -159,6 +159,7 @@ class UserService:
         )
 
         await self.session.commit()
+        return request.id
 
     async def get_user_stats(self, telegram_id: int) -> Optional[dict]:
         """Get user statistics for profile display."""

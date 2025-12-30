@@ -217,6 +217,48 @@ class RequestRepository:
         await self.session.flush()
         return request
 
+    async def get_by_id(self, request_id: int) -> Optional[Request]:
+        """Get request by ID."""
+        return await self.session.get(Request, request_id)
+
+    async def get_by_id_and_telegram_id(
+        self, request_id: int, telegram_id: int
+    ) -> Optional[Request]:
+        """Get request by ID, ensuring it belongs to the user with given telegram_id."""
+        result = await self.session.execute(
+            select(Request)
+            .join(User)
+            .where(Request.id == request_id)
+            .where(User.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_user_requests_by_telegram_id(
+        self,
+        telegram_id: int,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> List[Request]:
+        """Get requests for a user by their telegram_id."""
+        result = await self.session.execute(
+            select(Request)
+            .join(User)
+            .where(User.telegram_id == telegram_id)
+            .order_by(Request.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_user_requests_by_telegram_id(self, telegram_id: int) -> int:
+        """Count total requests for a user by their telegram_id."""
+        result = await self.session.execute(
+            select(func.count(Request.id))
+            .join(User)
+            .where(User.telegram_id == telegram_id)
+        )
+        return result.scalar() or 0
+
     async def get_user_requests(
         self,
         user_id: int,

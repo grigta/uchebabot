@@ -8,11 +8,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from admin.backend.config import admin_settings
-from admin.backend.routes import auth_router, stats_router, users_router, webhook_router
+from admin.backend.routes import (
+    auth_router,
+    solutions_router,
+    stats_router,
+    users_router,
+    webhook_router,
+)
 from bot.database import close_db, init_db
 
 
@@ -47,12 +55,39 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(stats_router)
 app.include_router(webhook_router)
+app.include_router(solutions_router)
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+# Serve Mini App static files
+webapp_dist = Path(__file__).parent.parent.parent / "webapp" / "dist"
+if webapp_dist.exists():
+    # Mount static assets
+    app.mount(
+        "/webapp/assets",
+        StaticFiles(directory=webapp_dist / "assets"),
+        name="webapp-assets"
+    )
+
+    # SPA fallback for Mini App routes
+    @app.get("/webapp/{path:path}")
+    async def serve_webapp(path: str):
+        """Serve Mini App with SPA fallback."""
+        file_path = webapp_dist / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        # Fallback to index.html for SPA routing
+        return FileResponse(webapp_dist / "index.html")
+
+    @app.get("/webapp")
+    async def serve_webapp_root():
+        """Serve Mini App root."""
+        return FileResponse(webapp_dist / "index.html")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,13 @@
       "Bash(tree:*)",
       "Bash(cat:*)",
       "WebFetch(domain:openrouter.ai)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/build-webapp.sh:*)",
+      "Bash(curl -s https://profit-tracked-beverly-mime.trycloudflare.com/health)",
+      "Bash(curl -s https://profit-tracked-beverly-mime.trycloudflare.com/webapp)"
     ]
   }
 }

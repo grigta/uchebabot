@@ -77,6 +77,9 @@ class Settings(BaseSettings):
         default=1440, alias="ADMIN_JWT_EXPIRE_MINUTES"
     )
 
+    # Mini App
+    webapp_url: str = Field(default="", alias="WEBAPP_URL")
+
     # App Settings
     debug: bool = Field(default=False, alias="DEBUG")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

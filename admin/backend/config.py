@@ -1,6 +1,6 @@
 """Admin panel configuration."""
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +27,18 @@ class AdminSettings(BaseSettings):
     # Telegram
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN")
     admin_ids: list[int] = Field(default_factory=list, alias="ADMIN_IDS")
+
+    @field_validator("admin_ids", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, v):
+        """Parse admin IDs from comma-separated string or single int."""
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        if isinstance(v, int):
+            return [v]
+        return v
 
     # CORS
     cors_origins: list[str] = Field(

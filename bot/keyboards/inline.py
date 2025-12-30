@@ -2,8 +2,9 @@
 
 from typing import List
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from bot.config import settings
 from bot.database.models import PackageType
 from bot.services.payment_service import Package, PaymentService
 
@@ -153,3 +154,26 @@ def get_payment_methods_keyboard(package_type: str) -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def get_solution_keyboard(request_id: int) -> InlineKeyboardMarkup:
+    """Get keyboard with WebApp button to open solution in Mini App."""
+    buttons = []
+
+    if settings.webapp_url:
+        # WebApp button to open specific solution
+        buttons.append([
+            InlineKeyboardButton(
+                text="📖 Открыть решение",
+                web_app=WebAppInfo(url=f"{settings.webapp_url}/solution/{request_id}"),
+            )
+        ])
+        # WebApp button to open history
+        buttons.append([
+            InlineKeyboardButton(
+                text="📚 История решений",
+                web_app=WebAppInfo(url=f"{settings.webapp_url}/history"),
+            )
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
