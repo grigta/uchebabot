@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(tree:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(sqlite3:*)"
+    ]
+  }
+}
