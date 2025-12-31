@@ -62,7 +62,7 @@ def create_access_token(telegram_id: int) -> str:
         minutes=admin_settings.jwt_expire_minutes
     )
     to_encode = {
-        "sub": telegram_id,
+        "sub": str(telegram_id),  # JWT 'sub' claim must be a string
         "exp": expire,
     }
     return jwt.encode(
@@ -75,8 +75,14 @@ def create_access_token(telegram_id: int) -> str:
 @router.post("/telegram", response_model=Token)
 async def telegram_login(auth_data: TelegramAuthData) -> Token:
     """Authenticate via Telegram Login Widget."""
-    # Verify auth data
-    if not verify_telegram_auth(auth_data):
+    # Dev mode bypass - skip hash verification
+    is_dev_login = (
+        admin_settings.debug
+        and auth_data.hash == "dev_hash"
+    )
+
+    # Verify auth data (skip in dev mode)
+    if not is_dev_login and not verify_telegram_auth(auth_data):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication data",
