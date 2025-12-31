@@ -120,6 +120,7 @@ class Request(Base):
 
     # Flags
     had_image: Mapped[bool] = mapped_column(default=False)
+    had_voice: Mapped[bool] = mapped_column(default=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

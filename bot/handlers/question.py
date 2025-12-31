@@ -81,9 +81,21 @@ async def get_image_base64(message: Message, bot: Bot) -> Optional[str]:
     return base64.b64encode(file_bytes.read()).decode("utf-8")
 
 
-@router.message(F.photo | (F.text & ~F.text.startswith("/")))
+async def get_voice_base64(message: Message, bot: Bot) -> Optional[str]:
+    """Download and encode voice message (OGG format)."""
+    if not message.voice:
+        return None
+
+    voice = message.voice
+    file = await bot.get_file(voice.file_id)
+    file_bytes = await bot.download_file(file.file_path)
+
+    return base64.b64encode(file_bytes.read()).decode("utf-8")
+
+
+@router.message(F.photo | F.voice | (F.text & ~F.text.startswith("/")))
 async def handle_question(message: Message, state: FSMContext, bot: Bot) -> None:
-    """Handle incoming question (text or photo)."""
+    """Handle incoming question (text, photo, or voice)."""
     # Skip if it's a button press
     if message.text in ["👤 Профиль", "❓ Помощь"]:
         return
@@ -91,7 +103,10 @@ async def handle_question(message: Message, state: FSMContext, bot: Bot) -> None
     # Get question text
     question_text = message.caption if message.photo else message.text
 
-    if not question_text:
+    # For voice messages, use default prompt
+    if message.voice and not question_text:
+        question_text = "Расшифруй голосовое сообщение и помоги с вопросом"
+    elif not question_text:
         question_text = "Помоги решить задачу на фото"
 
     # Check message length
@@ -124,11 +139,16 @@ async def handle_question(message: Message, state: FSMContext, bot: Bot) -> None
     # Get image if present
     image_base64 = await get_image_base64(message, bot) if message.photo else None
 
+    # Get voice if present
+    voice_base64 = await get_voice_base64(message, bot) if message.voice else None
+
     # Store data in state
     await state.update_data(
         question=question_text,
         image_base64=image_base64,
+        voice_base64=voice_base64,
         had_image=bool(image_base64),
+        had_voice=bool(voice_base64),
     )
 
     # Show typing indicator
@@ -140,6 +160,7 @@ async def handle_question(message: Message, state: FSMContext, bot: Bot) -> None
             question=question_text,
             system_prompt=INTERVIEW_PROMPT,
             image_base64=image_base64,
+            voice_base64=voice_base64,
         )
 
         interview_response = response["content"]
@@ -263,6 +284,7 @@ async def generate_and_show_plan(
     data = await state.get_data()
     question = data.get("question", "")
     image_base64 = data.get("image_base64")
+    voice_base64 = data.get("voice_base64")
     interview_context = data.get("interview_context", [])
 
     # Build context for plan generation
@@ -274,6 +296,7 @@ async def generate_and_show_plan(
             question="Составь план решения этой задачи",
             system_prompt=PLAN_PROMPT,
             image_base64=image_base64,
+            voice_base64=voice_base64,
             context=context,
         )
 
@@ -392,9 +415,11 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     question = data.get("question", "")
     image_base64 = data.get("image_base64")
+    voice_base64 = data.get("voice_base64")
     interview_context = data.get("interview_context", [])
     plan = data.get("plan", "")
     had_image = data.get("had_image", False)
+    had_voice = data.get("had_voice", False)
     skip_plan = data.get("skip_plan", False)
     request_type = data.get("request_type", "daily")
 
@@ -411,6 +436,7 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
             question="Реши задачу подробно, с объяснением каждого шага",
             system_prompt=MAIN_PROMPT,
             image_base64=image_base64,
+            voice_base64=voice_base64,
             context=context,
         )
 
@@ -449,6 +475,7 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
                 response_time_ms=response["response_time_ms"],
                 detected_subject=detected_subject,
                 had_image=had_image,
+                had_voice=had_voice,
                 # New fields for aggregated stats
                 total_prompt_tokens=total_prompt_tokens,
                 total_completion_tokens=total_completion_tokens,

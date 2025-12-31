@@ -113,6 +113,7 @@ class UserService:
         response_time_ms: int = 0,
         detected_subject: Optional[str] = None,
         had_image: bool = False,
+        had_voice: bool = False,
         # Aggregated stats from all stages (interview + plan + solution)
         total_prompt_tokens: int = 0,
         total_completion_tokens: int = 0,
@@ -151,6 +152,7 @@ class UserService:
             response_time_ms=response_time_ms,
             detected_subject=detected_subject,
             had_image=had_image,
+            had_voice=had_voice,
             # Aggregated stats
             total_prompt_tokens=total_prompt_tokens,
             total_completion_tokens=total_completion_tokens,

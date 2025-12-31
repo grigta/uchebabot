@@ -99,23 +99,36 @@ class OpenRouterClient:
         self,
         text: str,
         image_base64: Optional[str] = None,
+        voice_base64: Optional[str] = None,
     ) -> Union[str, List[dict]]:
-        """Build message content with optional image."""
-        if not image_base64:
+        """Build message content with optional image and voice."""
+        if not image_base64 and not voice_base64:
             return text
 
-        return [
-            {"type": "text", "text": text},
-            {
+        content = [{"type": "text", "text": text}]
+
+        if image_base64:
+            content.append({
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
-            },
-        ]
+            })
+
+        if voice_base64:
+            content.append({
+                "type": "input_audio",
+                "input_audio": {
+                    "data": voice_base64,
+                    "format": "ogg",
+                },
+            })
+
+        return content
 
     async def chat_completion(
         self,
         messages: List[Dict[str, Any]],
         image_base64: Optional[str] = None,
+        voice_base64: Optional[str] = None,
         system_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -124,6 +137,7 @@ class OpenRouterClient:
         Args:
             messages: List of message dicts with 'role' and 'content'
             image_base64: Optional base64-encoded image
+            voice_base64: Optional base64-encoded voice (OGG format)
             system_prompt: Optional system prompt to prepend
 
         Returns:
@@ -138,13 +152,13 @@ class OpenRouterClient:
             request_messages.append({"role": "system", "content": system_prompt})
 
         for msg in messages:
-            if msg["role"] == "user" and image_base64 and msg == messages[-1]:
-                # Add image to the last user message
+            if msg["role"] == "user" and (image_base64 or voice_base64) and msg == messages[-1]:
+                # Add image/voice to the last user message
                 request_messages.append(
                     {
                         "role": "user",
                         "content": self._build_message_content(
-                            msg["content"], image_base64
+                            msg["content"], image_base64, voice_base64
                         ),
                     }
                 )
@@ -180,6 +194,7 @@ class OpenRouterClient:
         question: str,
         system_prompt: str,
         image_base64: Optional[str] = None,
+        voice_base64: Optional[str] = None,
         context: Optional[List[dict]] = None,
     ) -> Dict[str, Any]:
         """
@@ -189,6 +204,7 @@ class OpenRouterClient:
             question: User's question
             system_prompt: System prompt for AI behavior
             image_base64: Optional base64-encoded image
+            voice_base64: Optional base64-encoded voice (OGG format)
             context: Optional previous messages for context
 
         Returns:
@@ -200,6 +216,7 @@ class OpenRouterClient:
         return await self.chat_completion(
             messages=messages,
             image_base64=image_base64,
+            voice_base64=voice_base64,
             system_prompt=system_prompt,
         )
 
