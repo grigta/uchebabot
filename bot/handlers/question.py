@@ -139,28 +139,52 @@ async def handle_question(message: Message, state: FSMContext, bot: Bot) -> None
     # Get image if present
     image_base64 = await get_image_base64(message, bot) if message.photo else None
 
-    # Get voice if present
-    voice_base64 = await get_voice_base64(message, bot) if message.voice else None
+    # Get voice and transcribe if present
+    had_voice = False
+    transcription_tokens = {"prompt": 0, "completion": 0, "cost": 0.0}
+    if message.voice:
+        had_voice = True
+        await bot.send_chat_action(message.chat.id, "typing")
+
+        voice_base64 = await get_voice_base64(message, bot)
+        if voice_base64:
+            # Transcribe voice using Gemini 2.5 Flash
+            transcription_result = await openrouter_client.transcribe_voice(voice_base64)
+            if transcription_result:
+                # Prepend transcription to question
+                question_text = f"[Голосовое сообщение]: {transcription_result['text']}"
+                # Save transcription tokens for cost tracking
+                transcription_tokens = {
+                    "prompt": transcription_result["prompt_tokens"],
+                    "completion": transcription_result["completion_tokens"],
+                    "cost": transcription_result["cost_usd"],
+                }
+            else:
+                await message.answer(
+                    "Не удалось распознать голосовое сообщение. Попробуй ещё раз или напиши текстом."
+                )
+                return
 
     # Store data in state
     await state.update_data(
         question=question_text,
         image_base64=image_base64,
-        voice_base64=voice_base64,
         had_image=bool(image_base64),
-        had_voice=bool(voice_base64),
+        had_voice=had_voice,
+        transcription_prompt_tokens=transcription_tokens["prompt"],
+        transcription_completion_tokens=transcription_tokens["completion"],
+        transcription_cost_usd=transcription_tokens["cost"],
     )
 
     # Show typing indicator
     await bot.send_chat_action(message.chat.id, "typing")
 
-    # Ask AI for interview questions
+    # Ask AI for interview questions (voice already transcribed to text)
     try:
         response = await openrouter_client.ask_question(
             question=question_text,
             system_prompt=INTERVIEW_PROMPT,
             image_base64=image_base64,
-            voice_base64=voice_base64,
         )
 
         interview_response = response["content"]
@@ -284,7 +308,6 @@ async def generate_and_show_plan(
     data = await state.get_data()
     question = data.get("question", "")
     image_base64 = data.get("image_base64")
-    voice_base64 = data.get("voice_base64")
     interview_context = data.get("interview_context", [])
 
     # Build context for plan generation
@@ -296,7 +319,6 @@ async def generate_and_show_plan(
             question="Составь план решения этой задачи",
             system_prompt=PLAN_PROMPT,
             image_base64=image_base64,
-            voice_base64=voice_base64,
             context=context,
         )
 
@@ -415,7 +437,6 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     question = data.get("question", "")
     image_base64 = data.get("image_base64")
-    voice_base64 = data.get("voice_base64")
     interview_context = data.get("interview_context", [])
     plan = data.get("plan", "")
     had_image = data.get("had_image", False)
@@ -436,7 +457,6 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
             question="Реши задачу подробно, с объяснением каждого шага",
             system_prompt=MAIN_PROMPT,
             image_base64=image_base64,
-            voice_base64=voice_base64,
             context=context,
         )
 
@@ -446,18 +466,24 @@ async def solve_task(message: Message, state: FSMContext, bot: Bot) -> None:
         detected_subject = extract_subject(answer)
         clean_answer = remove_subject_tag(answer)
 
-        # Calculate total tokens from all stages (interview + plan + solution)
+        # Calculate total tokens from all stages (transcription + interview + plan + solution)
         accumulated_prompt = data.get("accumulated_prompt_tokens", 0)
         accumulated_completion = data.get("accumulated_completion_tokens", 0)
 
-        total_prompt_tokens = accumulated_prompt + response["prompt_tokens"]
-        total_completion_tokens = accumulated_completion + response["completion_tokens"]
+        # Include transcription tokens (from Gemini 2.5 Flash)
+        transcription_prompt = data.get("transcription_prompt_tokens", 0)
+        transcription_completion = data.get("transcription_completion_tokens", 0)
+        transcription_cost = data.get("transcription_cost_usd", 0.0)
+
+        total_prompt_tokens = accumulated_prompt + response["prompt_tokens"] + transcription_prompt
+        total_completion_tokens = accumulated_completion + response["completion_tokens"] + transcription_completion
         total_all_tokens = total_prompt_tokens + total_completion_tokens
 
-        # Calculate cost in USD
+        # Calculate cost in USD (main model + transcription)
         cost_usd = (
             total_prompt_tokens * settings.openrouter_input_price +
-            total_completion_tokens * settings.openrouter_output_price
+            total_completion_tokens * settings.openrouter_output_price +
+            transcription_cost  # Add transcription cost from API response
         )
 
         # Save request and update usage

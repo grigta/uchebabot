@@ -172,6 +172,15 @@ class OpenRouterClient:
             "temperature": self.temperature,
         }
 
+        # Debug: log if audio is being sent
+        has_audio = any(
+            isinstance(msg.get("content"), list) and
+            any(c.get("type") == "input_audio" for c in msg["content"])
+            for msg in request_messages
+        )
+        if has_audio:
+            logger.info(f"Sending request with audio to model: {self.model}")
+
         response = await self._request_with_retry("POST", "/chat/completions", payload)
 
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -219,6 +228,86 @@ class OpenRouterClient:
             voice_base64=voice_base64,
             system_prompt=system_prompt,
         )
+
+
+    # Faster-Whisper for local speech-to-text transcription
+    _whisper_model = None
+
+    @classmethod
+    def _get_whisper_model(cls):
+        """Lazy load Whisper model."""
+        if cls._whisper_model is None:
+            from faster_whisper import WhisperModel
+            logger.info("Loading Whisper model (small)...")
+            # Use "small" for balance of speed/quality on CPU
+            # Options: tiny, base, small, medium, large-v3, turbo
+            cls._whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+            logger.info("Whisper model loaded")
+        return cls._whisper_model
+
+    async def transcribe_voice(self, voice_base64: str) -> Optional[Dict[str, Any]]:
+        """
+        Transcribe voice message using local Faster-Whisper.
+
+        Args:
+            voice_base64: Base64-encoded OGG audio
+
+        Returns:
+            Dict with 'text', 'prompt_tokens', 'completion_tokens', 'cost_usd' or None if failed
+        """
+        import tempfile
+        import os
+
+        start_time = time.time()
+
+        try:
+            # Decode base64 to bytes
+            audio_bytes = base64.b64decode(voice_base64)
+
+            # Save to temporary file
+            with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+                f.write(audio_bytes)
+                temp_path = f.name
+
+            try:
+                # Run transcription in thread pool (CPU-bound)
+                loop = asyncio.get_event_loop()
+                transcription = await loop.run_in_executor(
+                    None,
+                    self._transcribe_sync,
+                    temp_path,
+                )
+
+                response_time_ms = int((time.time() - start_time) * 1000)
+                logger.info(f"Voice transcribed in {response_time_ms}ms: {transcription[:100]}...")
+
+                return {
+                    "text": transcription,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,  # Local - free!
+                    "response_time_ms": response_time_ms,
+                }
+
+            finally:
+                # Cleanup temp file
+                os.unlink(temp_path)
+
+        except Exception as e:
+            logger.error(f"Voice transcription failed: {e}")
+            return None
+
+    def _transcribe_sync(self, audio_path: str) -> str:
+        """Synchronous transcription (runs in thread pool)."""
+        model = self._get_whisper_model()
+        segments, info = model.transcribe(
+            audio_path,
+            language="ru",
+            vad_filter=True,  # Remove silence
+            beam_size=5,
+        )
+        return " ".join([segment.text.strip() for segment in segments])
 
 
 # Global client instance

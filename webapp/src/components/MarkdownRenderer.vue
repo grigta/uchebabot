@@ -22,10 +22,17 @@ const marked = new Marked(
 
 // Function to render LaTeX math
 function renderMath(text: string): string {
+  // Normalize double-escaped backslashes (\\cdot -> \cdot)
+  // This handles cases where JSON serialization double-escaped backslashes
+  const normalizeBackslashes = (math: string): string => {
+    return math.replace(/\\\\([a-zA-Z]+)/g, '\\$1')
+  }
+
   // Block math: $$...$$
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
     try {
-      return katex.renderToString(math.trim(), {
+      const normalizedMath = normalizeBackslashes(math.trim())
+      return katex.renderToString(normalizedMath, {
         displayMode: true,
         throwOnError: false,
         strict: false
@@ -38,7 +45,8 @@ function renderMath(text: string): string {
   // Inline math: $...$  (but not $$)
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
     try {
-      return katex.renderToString(math.trim(), {
+      const normalizedMath = normalizeBackslashes(math.trim())
+      return katex.renderToString(normalizedMath, {
         displayMode: false,
         throwOnError: false,
         strict: false

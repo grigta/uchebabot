@@ -49,11 +49,12 @@ async def get_current_admin(
             admin_settings.jwt_secret,
             algorithms=[admin_settings.jwt_algorithm],
         )
-        telegram_id: int = payload.get("sub")
-        if telegram_id is None:
+        telegram_id_raw = payload.get("sub")
+        if telegram_id_raw is None:
             raise credentials_exception
+        telegram_id = int(telegram_id_raw)
 
-    except JWTError:
+    except (JWTError, ValueError):
         raise credentials_exception
 
     # Verify admin access

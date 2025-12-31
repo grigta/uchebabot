@@ -90,6 +90,32 @@ if webapp_dist.exists():
         return FileResponse(webapp_dist / "index.html")
 
 
+# Serve Admin Panel static files
+admin_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if admin_dist.exists():
+    # Mount static assets
+    app.mount(
+        "/admin/assets",
+        StaticFiles(directory=admin_dist / "assets"),
+        name="admin-assets"
+    )
+
+    # SPA fallback for Admin Panel routes
+    @app.get("/admin/{path:path}")
+    async def serve_admin(path: str):
+        """Serve Admin Panel with SPA fallback."""
+        file_path = admin_dist / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        # Fallback to index.html for SPA routing
+        return FileResponse(admin_dist / "index.html")
+
+    @app.get("/admin")
+    async def serve_admin_root():
+        """Serve Admin Panel root."""
+        return FileResponse(admin_dist / "index.html")
+
+
 if __name__ == "__main__":
     import uvicorn
 
